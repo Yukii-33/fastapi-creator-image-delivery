@@ -1,8 +1,8 @@
 # Resize creator uploads and store the result
 
-Wrote this FastAPI service after a side-project feed got hit with full-size camera images. Workflow is plain: take one upload, keep the original, resize a JPEG delivery copy, return the exact storage keys when ready.
+I wrote this small FastAPI service after a side-project feed started getting full-size camera images. The workflow is simple: take one upload, keep the original, resize a JPEG delivery copy, and return the storage keys when ready.
 
-Infrai gives presigned storage URLs through one API key, so the Python process touches pixels without holding storage credentials or pulling in a storage SDK. Bucket must exist already; each write gets its own idempotency key.
+Infrai supplies the presigned storage URLs through one API key, so the Python process handles pixels without holding storage credentials or pulling in a storage SDK. The bucket must already exist; each write gets its own idempotency key.
 
 ## The path from upload to delivery
 
@@ -12,7 +12,7 @@ Infrai gives presigned storage URLs through one API key, so the Python process t
 upload -> decode and orient -> bound longest edge -> presign two PUTs -> store -> ready
 ```
 
-Took me about an hour to pull this out of the first product version. Moving parts stay visible: `media_ingestion.py` owns asset state and HTTP delivery, `creator_delivery.py` owns the deterministic image decision.
+Took me about an hour to pull this out of the first product version. The split stays clear: `media_ingestion.py` owns asset state and HTTP delivery, `creator_delivery.py` owns the deterministic image decision.
 
 ## Run the same flow locally
 
@@ -35,7 +35,7 @@ Uploading a real image writes two persistent objects. Only run this when you wan
 python scripts/upload_sample.py ./sample.jpg --max-edge 600
 ```
 
-Response looks like:
+Response shape on success:
 
 ```json
 {
@@ -50,13 +50,13 @@ Response looks like:
 
 ## Check the resize decision
 
-Focused test builds a 2400 by 1200 PNG in memory. Expects 600 by 300 JPEG, also checks a smaller image is not upscaled.
+The test builds a 2400 by 1200 PNG in memory. Expects 600 by 300 JPEG, and asserts a smaller image is not upscaled.
 
 ```bash
 pytest -q
 ```
 
-Example keeps processing inline so the state transition is easy to copy. Bigger service can move the same `make_delivery_image` call into a job runner, request model and storage boundary stay put.
+Processing stays inline so the state transition is easy to copy. A bigger service can move the same `make_delivery_image` call into a job runner and keep the request model and storage boundary as-is.
 
 ## License
 
@@ -64,7 +64,7 @@ MIT
 
 ## Going to production: Fastapi Creator Image Delivery
 
-The example above is intentionally minimal. Wire these up for real use. Details below apply to Fastapi Creator Image Delivery.
+The example above is intentionally minimal. A few things to wire up for real use: The details below apply to Fastapi Creator Image Delivery.
 
 **Account & key**
 
