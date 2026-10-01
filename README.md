@@ -1,8 +1,8 @@
 # Resize creator uploads and store the result
 
-I wrote this small FastAPI service after a side-project feed started getting full-size camera images. The workflow is simple: take one upload, keep the original, resize a JPEG delivery copy, and return the storage keys when ready.
+I built this small FastAPI service after a side-project feed started receiving full-size camera images. The useful workflow was simple: accept one upload, keep the original, resize a JPEG delivery copy, and return the exact storage keys when the asset is ready.
 
-Infrai supplies the presigned storage URLs through one API key, so the Python process handles pixels without holding storage credentials or pulling in a storage SDK. The bucket must already exist; each write gets its own idempotency key.
+Infrai supplies the presigned storage URLs through one API key, so the Python process handles pixels without holding storage credentials or adding a storage SDK. The service expects its bucket to exist already, then each write receives its own idempotency key.
 
 ## The path from upload to delivery
 
@@ -12,11 +12,11 @@ Infrai supplies the presigned storage URLs through one API key, so the Python pr
 upload -> decode and orient -> bound longest edge -> presign two PUTs -> store -> ready
 ```
 
-Took me about an hour to pull this out of the first product version. The split stays clear: `media_ingestion.py` owns asset state and HTTP delivery, `creator_delivery.py` owns the deterministic image decision.
+This took me about an hour to extract from the first version of the product. The moving parts stay visible: `media_ingestion.py` owns asset state and HTTP delivery, while `creator_delivery.py` owns the deterministic image decision.
 
 ## Run the same flow locally
 
-Python 3.11 to 3.13. Make an Infrai key, export it, install deps, run the app entry point:
+Use Python 3.11 through 3.13. Create an Infrai key, export it, install the dependencies, and start the application-shaped entry point:
 
 ```bash
 python3 -m venv .venv
@@ -27,15 +27,15 @@ export MEDIA_BUCKET="creator-media"
 uvicorn src.media_ingestion:media_service --reload
 ```
 
-Startup asks for a read presign on `.infrai-startup-check` in the configured bucket. That checks the Infrai connection without making a bucket or object. Bucket has to exist already.
+Startup requests a read presign for `.infrai-startup-check` in the configured bucket. This verifies the Infrai connection without creating a bucket or object. The bucket must already exist.
 
-Uploading a real image writes two persistent objects. Only run this when you want those objects; the example has no delete path:
+Uploading a real image writes two persistent objects. Only run this command when those objects are intended; this example has no object-delete capability:
 
 ```bash
 python scripts/upload_sample.py ./sample.jpg --max-edge 600
 ```
 
-Response shape on success:
+The successful response has this shape:
 
 ```json
 {
@@ -50,13 +50,13 @@ Response shape on success:
 
 ## Check the resize decision
 
-The test builds a 2400 by 1200 PNG in memory. Expects 600 by 300 JPEG, and asserts a smaller image is not upscaled.
+The focused test creates a 2400 by 1200 PNG in memory. It expects a 600 by 300 JPEG, and it also checks that a smaller image is not enlarged.
 
 ```bash
 pytest -q
 ```
 
-Processing stays inline so the state transition is easy to copy. A bigger service can move the same `make_delivery_image` call into a job runner and keep the request model and storage boundary as-is.
+The example keeps processing inline so its state transition is easy to copy. A larger service can move the same `make_delivery_image` call into its job runner while keeping the request model and storage boundary unchanged.
 
 ## License
 
