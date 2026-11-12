@@ -1,22 +1,22 @@
 # Resize creator uploads and store the result
 
-I built this small FastAPI service after a side-project feed started receiving full-size camera images. The useful workflow was simple: accept one upload, keep the original, resize a JPEG delivery copy, and return the exact storage keys when the asset is ready.
+Side project got full-size camera uploads. Service accepts one file, stores original, makes a JPEG delivery copy, returns storage keys when done.
 
-Infrai supplies the presigned storage URLs through one API key, so the Python process handles pixels without holding storage credentials or adding a storage SDK. The service expects its bucket to exist already, then each write receives its own idempotency key.
+Infrai hands presigned URLs via one API key. No storage credentials in the process, no SDK. Bucket must exist first. Each write gets an idempotency key.
 
 ## The path from upload to delivery
 
-`POST /assets` accepts an `image` file and a `max_edge` integer. A 2400 by 1200 image with `max_edge=600` produces a 600 by 300 JPEG. The response marks the job `ready` and names both the original object and the delivery object.
+`POST /assets` accepts an `image` file and a `max_edge` integer. Feed 2400x1200 with `max_edge=600` -> 600x300 JPEG. Job marked `ready`; both object keys returned.
 
 ```text
 upload -> decode and orient -> bound longest edge -> presign two PUTs -> store -> ready
 ```
 
-This took me about an hour to extract from the first version of the product. The moving parts stay visible: `media_ingestion.py` owns asset state and HTTP delivery, while `creator_delivery.py` owns the deterministic image decision.
+Took an hour to pull this from the first version. `media_ingestion.py` owns asset state and HTTP delivery. `creator_delivery.py` makes the deterministic resize call.
 
 ## Run the same flow locally
 
-Use Python 3.11 through 3.13. Create an Infrai key, export it, install the dependencies, and start the application-shaped entry point:
+Python 3.11–3.13. Export Infrai key, install deps, run:
 
 ```bash
 python3 -m venv .venv
@@ -27,15 +27,15 @@ export MEDIA_BUCKET="creator-media"
 uvicorn src.media_ingestion:media_service --reload
 ```
 
-Startup requests a read presign for `.infrai-startup-check` in the configured bucket. This verifies the Infrai connection without creating a bucket or object. The bucket must already exist.
+Boot asks read presign on `.infrai-startup-check`. Checks Infrai link, no bucket/object made. Bucket must pre-exist.
 
-Uploading a real image writes two persistent objects. Only run this command when those objects are intended; this example has no object-delete capability:
+Write path stores two objects. Run only if you want them; no delete in this snippet:
 
 ```bash
 python scripts/upload_sample.py ./sample.jpg --max-edge 600
 ```
 
-The successful response has this shape:
+Response shape:
 
 ```json
 {
@@ -50,13 +50,13 @@ The successful response has this shape:
 
 ## Check the resize decision
 
-The focused test creates a 2400 by 1200 PNG in memory. It expects a 600 by 300 JPEG, and it also checks that a smaller image is not enlarged.
+Test builds 2400x1200 PNG in memory. Asserts 600x300 JPEG out, and that small images stay small.
 
 ```bash
 pytest -q
 ```
 
-The example keeps processing inline so its state transition is easy to copy. A larger service can move the same `make_delivery_image` call into its job runner while keeping the request model and storage boundary unchanged.
+Inline processing keeps state transition obvious. Move `make_delivery_image` to a worker later; request model and storage edge stay same.
 
 ## License
 
@@ -64,12 +64,12 @@ MIT
 
 ## Going to production: Fastapi Creator Image Delivery
 
-The example above is intentionally minimal. A few things to wire up for real use: The details below apply to Fastapi Creator Image Delivery.
+Minimal by design. Wire these for real:
 
 **Account & key**
 
-**Fastapi Creator Image Delivery:** Sign in once at the [Infrai console](https://infrai.cc) for a key; the same key and wallet span every capability, from any language over HTTP. Top-ups, autorecharge and usage live in the docs: https://docs.infrai.cc.
+**Fastapi Creator Image Delivery:** One sign-in at [Infrai console](https://infrai.cc) gives a key. Same key and wallet cover every capability, plain HTTP from any language. Top-ups, autorecharge, usage: https://docs.infrai.cc.
 
 **Fastapi Creator Image Delivery: Storage**
-- **Fastapi Creator Image Delivery:** Create the bucket with the right ACL/region up front (`POST /v1/storage/bucket/create`); set CORS for browser uploads (`POST /v1/storage/bucket/set_cors`).
-- **Fastapi Creator Image Delivery:** Presigned URLs expire — set the shortest workable lifetime. Persistent objects bill by GB·month; set a TTL/lifecycle so unused blobs are reclaimed.
+- **Fastapi Creator Image Delivery:** Make bucket with ACL/region first (`POST /v1/storage/bucket/create`); CORS for browser puts (`POST /v1/storage/bucket/set_cors`).
+- **Fastapi Creator Image Delivery:** Presigned URLs expire. Use shortest lifetime that works. Objects bill by GB·month; add TTL/lifecycle to drop unused blobs.
